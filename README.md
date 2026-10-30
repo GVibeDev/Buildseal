@@ -1,8 +1,8 @@
 # BuildSeal
 
-**A release security toolchain for independent game developers — concept and technical feasibility review.**
+**Release identity, provenance and integrity for indie games — a proposal for technical peer review.**
 
-**Una toolchain per la sicurezza delle release di videogiochi indipendenti — proposta e analisi di fattibilità tecnica.**
+**Identità, provenienza e integrità delle release indie — proposta per revisione tecnica.**
 
 ## Read the reports / Leggi i report
 
@@ -11,7 +11,7 @@
 | English | [Abstract and technical feasibility report](BuildSeal_Report_EN.md) |
 | Italiano | [Abstract e rapporto tecnico di fattibilità](BuildSeal_Report_IT.md) |
 
-**Status / Stato:** pre-development proposal, report version 0.2, 30 October 2026. No prototype or benchmarks yet. / Proposta pre-sviluppo, report versione 0.2, 30 ottobre 2026. Nessun prototipo o benchmark ancora disponibile.
+**Status / Stato:** pre-development proposal, report version 0.3, 30 October 2026. No prototype or benchmarks yet. / Proposta pre-sviluppo, report versione 0.3, 30 ottobre 2026. Nessun prototipo o benchmark ancora disponibile.
 
 ## English
 
@@ -21,7 +21,7 @@ The proposed architecture combines an engine-independent Core with engine-specif
 
 The goal is to detect tampering, reject inconsistent release components in the official loading and update paths, improve forensic traceability and measure whether additional protection raises the cost of opportunistic abuse. A fully attacker-controlled client remains a fundamental limitation: BuildSeal does not claim unbreakable DRM or prevention of independent reconstruction from gameplay footage.
 
-The reports also outline a **separate complementary application** for media provenance, watermarking and controlled experiments involving screenshots and videos. Its research questions and success criteria are distinct from runtime protection.
+Media provenance and watermarking belong to **separate research**. Preventing reconstruction from screenshots or video is outside BuildSeal's protection scope. Protected remains an optional experiment; no improvement over native engine protection has yet been demonstrated.
 
 ### Purpose of this repository
 
@@ -37,7 +37,7 @@ L'architettura proposta combina un Core indipendente dal motore con adapter spec
 
 L'obiettivo è rilevare alterazioni, rifiutare componenti di release incoerenti nei percorsi ufficiali di caricamento e aggiornamento, rafforzare la tracciabilità forense e misurare se le protezioni aggiuntive aumentino il costo degli abusi opportunistici. Il controllo completo del client da parte dell'attaccante resta un limite fondamentale: BuildSeal non promette DRM inviolabile né di impedire una ricostruzione indipendente da video di gameplay.
 
-I report delineano anche un **applicativo complementare distinto**, dedicato a provenienza dei media, watermark e sperimentazione controllata su screenshot e video. Domande di ricerca e criteri di successo sono separati da quelli della protezione runtime.
+Provenienza dei media e watermark appartengono a una **ricerca autonoma**. Impedire la ricostruzione da screenshot o video è fuori dall'ambito di protezione di BuildSeal. Protected resta un esperimento opzionale: non è ancora dimostrato un vantaggio rispetto alle protezioni native dei motori.
 
 ### Scopo del repository
 
@@ -48,3 +48,9 @@ I documenti discutono TUF, in-toto, SLSA, Sigstore e C2PA come possibili basi o 
 ## License / Licenza
 
 See [LICENSE](LICENSE) for the GNU General Public License v3.0 included in this repository. / Consulta [LICENSE](LICENSE) per la GNU General Public License v3.0 presente nel repository.
+
+## Revision 0.3 / Revisione 0.3
+
+This revision clarifies key management and trust boundaries, adds native-engine baselines, dynamic extraction and cross-copy attacks, and includes adoption, licensing and patch-size tradeoffs. Technical feasibility and user demand remain to be validated. See [CHANGELOG.md](CHANGELOG.md).
+
+La revisione chiarisce gestione delle chiavi e confini di fiducia, introduce confronti con i motori, estrazione dinamica e attacchi tra copie e aggiunge adozione, licenze e costi delle patch. Fattibilità tecnica e domanda restano da verificare. Vedi [CHANGELOG.md](CHANGELOG.md).

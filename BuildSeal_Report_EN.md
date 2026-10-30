@@ -1,22 +1,22 @@
 # BuildSeal — Abstract and Technical Feasibility Report
 
-**Version:** 0.2 — discussion document for peer review  
+**Version:** 0.3 — discussion document for peer review\
 **Date:** 30 October 2026  
 **Status:** pre-development proposal; no prototype or benchmarks completed  
 **Audience:** cybersecurity, reverse engineering, software supply-chain security, applied cryptography, game development and distribution professionals  
-**Scope:** BuildSeal, a hybrid release-protection, attestation and management system. A complementary but distinct application for promotional-media protection is also outlined.
+**Scope:** BuildSeal, a release identity, provenance and integrity proposal, with experimental runtime protection and separate media research.
 
 > **Purpose.** Present the proposal rigorously, separating agreed design directions from technical hypotheses and known limitations. The goal is to invite competent criticism **before** implementation begins. This is not a white paper describing an existing product, nor a claim of unbreakable protection.
 
 ## Abstract
 
-The growing availability of generative AI, asset-extraction tools and reverse-engineering techniques can reduce the effort required to reproduce, reuse or redistribute parts of a video game. Independent developers are especially exposed: they need to publicize games early to attract attention, collect wishlists and reach their audience, but often have limited resources to respond to opportunistic copies or unauthorized redistribution. The problem includes at least two distinct scenarios: **(a)** reconstructing a game by observing screenshots or gameplay videos, even without obtaining the original software; and **(b)** analyzing and modifying an actual distributed, playable build.
+BuildSeal is a proposal for a **release identity, provenance and integrity toolchain for independent games**. Its intended core connects inventories, signed manifests, attestations and baseline/patch/hotfix lineage through an engine-independent Core and engine adapters. The value to validate is making existing security practices accessible and consistent in indie pipelines. Cryptographic novelty and commercial usefulness are not established.
 
-**BuildSeal** primarily targets the second scenario. It is conceived as a **release security toolchain**: a mandatory checkpoint in the promotion of every baseline, patch and hotfix, combining an **engine-agnostic core** with **engine-specific adapters** that integrate security checks into packaging and runtime resource loading. Every official artifact receives a layered identity (project, release and optionally distribution), an authenticated manifest, cryptographic digests, provenance attestations and references to a verifiable update lineage. Its more ambitious hypothesis is to link access to selected resources essential to gameplay to the validity of the release identity, using a Runtime Guard and selective cryptographic protection.
+The primary problem is recognizing official artifacts, detecting changes and inconsistent combinations, and documenting provenance. Signatures and attestations do not certify that a build is harmless: a compromised pipeline can sign malicious content. Independent verification and a modifiable runtime have different trust boundaries.
 
-The intended outcomes are to **detect unauthorized changes, reject inconsistent component combinations in the official execution path, improve forensic traceability and raise the cost of opportunistic abuse**. The system cannot guarantee that an attacker with full client control will be unable to bypass checks or extract data and keys made available during execution. Nor can it prevent conceptual reconstruction from a preview. That separate risk motivates a **second experimental application** focusing on robust watermarking, media provenance and controlled multimodal-model interpretation tests.
+An optional, experimental **Protected** profile asks whether selective encryption and a Runtime Guard raise practical extraction costs beyond native engine protections. It does not guarantee permanent secrecy or enforcement on a fully attacker-controlled client. Connected changes the trust boundary only for secrets and operations actually retained server-side. Reconstruction from screenshots and videos is outside BuildSeal's protection promise; media provenance and watermarking belong to separate research.
 
-This report outlines an initial threat model, architecture, possible cryptographic building blocks, release state machine, experimental criteria and open questions for independent reviewers. **The desired outcome is not validation by enthusiasm, but the discovery of weak assumptions, fundamental limitations and components better served by existing standards.**
+Revision 0.3 incorporates peer-review concerns: key origins, dynamic dumping, collusion between copies, reusable extractors, channel-specific adoption and update costs. **No prototype, benchmark or protection result exists yet.** The aim is to decide what merits an experiment and what should be dropped.
 
 ## 1. Problem statement and objectives
 
@@ -94,6 +94,8 @@ flowchart TD
 
 Forensic references may be replicated across different package locations to improve their chances of surviving partial modification. An attacker can still remove them or recompile the application. Finding a marker establishes at most a **technical association that requires context**: it does not automatically assign personal liability or establish copyright ownership.
 
+**Collusion and marker transplantation.** Comparing differentiated copies can reveal variable fields, enable removal or replacement, or produce hybrid copies. A simple Distribution ID is not collusion-resistant fingerprinting. Test cross-copy comparison, transplantation and marker loss; collusion-resistant codes would require separate research on payload, copy count and false positives. No marker automatically establishes personal responsibility.
+
 **Illustrative manifest only (not a finalized schema):**
 
 ```json
@@ -114,23 +116,50 @@ Forensic references may be replicated across different package locations to impr
 
 Signatures must cover a **canonical and unambiguous representation** of the payload, without recursive references (the manifest must not include the hash of its own signature). Canonicalization, paths, symlinks, optional files, digest encodings, verification APIs and key rotation/revocation remain to be specified.
 
-## 5. Cryptographic dependency and runtime enforcement
+## 5. Key management, cryptographic guarantees and experimental runtime protection
 
-The central hypothesis is to make some **gameplay-essential resources** accessible only through a validated loading path. A possible laboratory workflow is:
+### 5.1 Separate guarantees
 
-1. At sealing time, the Core computes digests and signs an inventory.
-2. It packages selected resources in an authenticated encrypted container (for example using **AES-GCM**, with correct nonce uniqueness and key management).
-3. The Runtime Guard validates the signature, trust root, Release ID, compatibility policy and resource integrity.
-4. The loader obtains or derives a content key according to the chosen policy, then decrypts/authenticates the resource before handing it to the engine.
-5. If checks fail, **the official runtime** does not provide protected resources; it returns a clear, recoverable error and offers a repair path. **It does not delete files.**
+- **Hashes:** identify content against a trusted reference; alone they do not identify its producer.
+- **Manifest signature:** authenticates a statement relative to a trusted signing key. The private signing key stays in the pipeline, separate from encryption keys; it is never shipped to the game.
+- **Authenticated encryption (AEAD):** provides confidentiality and symmetric integrity under a secret key. An attacker who compromises that key can create new ciphertexts with valid tags; the tag is not a publicly verifiable producer signature.
+- **Runtime Guard:** enforces policy in the official path, but a hostile client can modify or replace it. A valid signature does not force a modified verifier to obey it.
 
-Three protection profiles are proposed for separate evaluation:
+### 5.2 Key origin and availability
 
-- **Standard (offline):** manifests, signatures, digests, independent verification and consistent updates. Main benefits: integrity and provenance.
-- **Protected (offline):** Standard plus selective encryption and a Runtime Guard. Raises the effort required for trivial extraction but does not prevent recovery of plaintext data in memory or modification of checks.
-- **Connected (optional):** authorization or key material delivered by a remote service. Can keep **some secrets** off the client or move **some operations** server-side, but creates connectivity dependence, operational costs and potential legitimate-user lockout.
+| Profile | Origin and availability | Guarantee and limit |
+|---|---|---|
+| Standard offline | No content key; public verification key shipped, private signing key retained in the pipeline | Integrity and provenance against an authentic trust root; local verifier can be replaced |
+| Protected offline, laboratory hypothesis | Random content key generated at sealing; delivered or reconstructed by the loader using material available to the client | Barrier to immediate extraction; keys and plaintext remain recoverable under full client control |
+| Optional Connected | Authorization secret or operation retained by a service; any content key delivered only after authorization | Delivered keys and data remain capturable; exclusively server-side material has a different trust boundary |
 
-**Fundamental limitation:** in an offline model, the client must hold or derive the material needed to decrypt content it uses. An attacker with full device control can attempt to observe keys and plaintext at the moment they are available. A proprietary container format plus a custom “translator” or loader may increase extraction costs; **it cannot eliminate this structural limit**. Platform attestation, hardware-backed isolation and remote attestation change the trust model only on supported platforms, with specific trade-offs.
+**Explicit minimal hypothesis for the first Protected PoC:** a random key per protected container, with a documented, deliberately inspectable local delivery mechanism. If embedded in the binary, test static key recovery; any obfuscation must be described as such. This is not an approved production scheme. Invasive machine identifiers remain excluded under §8.
+
+Before implementation, specify generation, storage, delivery, lifetime in memory, failure handling, rotation and compromise scope. Do not ship a project-wide master when resource- or release-scoped keys suffice. Best-effort memory clearing does not guarantee that earlier copies were not observed.
+
+### 5.3 Derivation and identity binding
+
+A possible laboratory scheme uses **HKDF** with secret, random input keying material, an explicit salt and context. Project ID, Release ID, resource ID, format version and key purpose may be encoded into `info` using canonical, unambiguous length-delimited fields. **HKDF does not turn public data into a secret.** Code hashes, manifests and public signatures alone cannot create a confidential key.
+
+The master stays in the pipeline; a client would receive only material needed for its content. This narrows compromise scope but does not make offline-decryptable resources permanently secret. Keep signing and encryption keys separate and do not derive secret keys from a published signature.
+
+An experimental variant may bind derivation to code and manifest hashes: modifying measured bytes changes the result. Define which bytes are covered and avoid circular packaging dependencies. An attacker can use an intact copy, falsify the measurement or intercept the key. **Key-entanglement is a comparative hypothesis, not a new trust root.** Retain it only if it improves results over a simpler loader.
+
+### 5.4 Nonces, algorithms and loading
+
+AES-GCM requires uniqueness of the key–nonce pair for distinct messages, including retries, parallel builds and resealing. Derivation must include a content version or change the key when a resource changes; a resource name alone does not manage re-encryption safely. Define verifiable nonce-allocation rules, usage limits and rebuild tests. Never obtain deduplication through unsafe key/nonce reuse.
+
+XChaCha20-Poly1305 has longer nonces useful for random allocation, but is not automatically nonce-misuse-resistant. AES-GCM-SIV is a separate candidate to assess for misuse resistance, with its own limits and library support to verify. The cited libsodium documentation is not assumed to establish AES-GCM-SIV support. No algorithm is finally selected.
+
+The intended official path is: verify the signed manifest and container digests → check identity and compatibility → obtain the key → authenticate and decrypt → deliver to the resource manager. Context metadata may be authenticated as AAD; this neither makes it secret nor replaces the signature. Unauthenticated plaintext must not be exposed to the engine. Failure denies only the protected resource and supports repair without deleting user data. User errors must support recovery without exposing secrets; detailed diagnostics belong in development/support facilities. Reducing error detail is not a security boundary.
+
+### 5.5 Priority attacks and packaging
+
+Test static extraction, key interception, dumping at loader output, loader/Guard patching and verifier substitution. One hook may intercept many resources, but coverage depends on paths exercised: one recovered asset does not establish complete extraction. Framebuffer/audio capture recovers a usable representation, not necessarily the original files and project structure.
+
+Metrics include first asset, complete extraction, fidelity, time to build an automated extractor and reuse across releases and games. Diversification may limit reuse, but its developer cost must also be measured.
+
+**Compress before encryption** when compression is useful. Re-encrypting a large container with a new key or nonce may change many bytes and impair deltas and deduplication. Compare monolithic containers, separate resources and independently authenticated chunks; measure download bytes, staging space and patch time. Fresh release keys and reuse of unchanged encrypted chunks are competing choices that must be explicit. Chunked designs must also authenticate inventory, order and context to prevent unauthorized mixing.
 
 ## 6. Release lifecycle, patches and updates
 
@@ -175,32 +204,34 @@ Further requirements include: no mandatory online-only mode for Standard; consid
 
 **Proposed rule:** the Core should expose an explicit *capabilities* model. Each adapter must declare which controls it can actually implement. A request for unavailable protection must be rejected or explicitly downgraded, never represented as equivalent security.
 
-## 10. Complementary project: preventive media and preview protection
+## 10. Separate research on media provenance
 
-Reconstruction from screenshots or videos calls for **a separate application** with its own research methods and success metrics. The proposed tool would prepare media for publication with an **asset identifier, developer attribution reference, signed provenance, optional trusted timestamp and invisible watermark**. The watermark should carry a compact pointer to a verifiable registry rather than duplicating all metadata.
+Reconstruction from previews is **outside BuildSeal's protection scope**. Any media project will have its own proposal, threat model, experiments and go/no-go criteria. Only an interoperability boundary remains here: Project IDs, asset references and attestations may connect media to releases without conflating guarantees.
 
-The experimental work asks whether, and under what conditions, multimodal reconstruction pipelines can be influenced by **signals or messages embedded in content**, low-visibility image perturbations or properties of encoding and compression. Research must start with the *actual ingestion path*: original file, metadata, decoder, normalization, platform transcoding and the representation eventually presented to the model. We must not assume that a model receives every original byte, reads metadata or treats instructions in third-party media as authoritative.
+Signed provenance, C2PA and watermarking may be assessed for attribution and traceability, separately testing survival under metadata stripping, transcoding, cropping and screen capture. They do not automatically establish ownership or personal responsibility and do not prevent copying.
 
-**Hypotheses requiring tests, not established capabilities:** watermark survival after transcoding; recognition of a hidden payload; measurable impact on reconstruction fidelity; robustness to cropping, scaling and screen capture. Deliberately malformed data intended to break external tools is not treated as a reliable protection method or proposed product feature. Any adversarial tests must take place in isolated, authorized settings.
+Research on perturbations or multimodal interpretation is not a promised feature, requirement or validation phase of BuildSeal. It requires authorized, reproducible, model- and pipeline-specific tests; an observed effect does not establish general robustness or reconstruction prevention.
 
-**Potential synergy with BuildSeal:** Project IDs, provenance registries, attestation structure, potentially identity signing keys and a shared asset history. **Separation:** success in watermark retrieval does not establish runtime security, and a signed executable does not prevent its gameplay mechanics from being independently reconstructed from a video.
+## 11. Experimental plan and decision criteria
 
-For media, standards such as **C2PA** already address provenance, distinguishing cryptographically exact content binding from more flexible associations using perceptual fingerprints or watermarks. They should be assessed as interoperability foundations, not as magic anti-copy mechanisms.
+**Proposed order:** review and threat-model definition → small early Protected risk experiment → provenance MVP → updates where needed → real engine adapter. The early experiment limits investment in the weakest hypothesis; it does not replace correct signing and verification.
 
-## 11. Experimental plan before full development
-
-| Phase | Experiment | Expected evidence / question |
+| Phase | Experiment | Evaluation criterion |
 |---|---|---|
-| **0 — Peer review** | Threat model, boundaries, comparison with existing approaches | Which assumption is wrong or redundant? |
-| **1 — Provenance MVP** | Minimal test game, manifest, signature, independent verifier | Are substitution, tampering and untrusted keys consistently detected? |
-| **2 — Protected MVP** | Encrypted asset, loader and Guard in an authorized test runtime | How costly is bypassing the official path? When is data in plaintext? |
-| **3 — Update MVP** | Baseline A, patch A→B, forged patch, A/B mixing and interrupted update | Are security and recovery adequate? |
-| **4 — Adapter** | One real engine adapter, then HTML5 for contrast | How much of the Core is genuinely universal? |
-| **5 — Media (separate)** | Images/videos, compression, watermarking and authorized multimodal tests | Are there reproducible effects beyond traceability? |
+| 0 — Review and adoption | Define users, channels, verifiers and existing services | Is there a concrete problem the current pipeline leaves unresolved? |
+| 1 — Early Protected comparison | Same game/assets: A ordinary package + signature/verifier; B A + native engine protection; C A + Guard and selective encryption | Does C add practical value over B? XOR may be an optional educational control only |
+| 2 — Provenance MVP | Manifest, signature, untrusted key, substituted file, simulated builder compromise | Separate artifact integrity, signer authenticity and builder trustworthiness |
+| 3 — Optional update MVP | A→B, mixed versions, rollback, revocation and interruption | Verification, recovery and download cost; avoid duplicating a store updater |
+| 4 — Adapter | One real engine and an HTML5 comparison | Integration cost, actual capabilities and maintenance |
+| Connected variant | Compare with C if justified | Which secrets/operations stay server-side and which become exposed again? |
 
-**Essential metrics:** false positives and negatives in checks; file coverage; build, startup, memory and frame-time overhead; time and tools required to bypass an **authorized prototype**; marker persistence after transformations; recovery success; adapter integration and maintenance costs; offline availability. No numerical protection claims should be made before benchmarking.
+**Three authorized attack paths:** static extraction without execution; dynamic dumping of loaded content; loader or verification patching. Use identical assets and declare skills, starting knowledge, source access, tools, hardware and time budget. Separate white-box and black-box assessment. Report failures and coverage limits; a timeout is a censored observation, not proof of unbreakability.
 
-**Go/no-go criteria:** if Protected offers no meaningful measurable improvement over signing + independent verification + secure updates, or causes excessive legitimate-user failures, it should be reduced or dropped. Even if anti-extraction proves uneconomical, BuildSeal may still be valuable as a **release-security and forensic-provenance system**.
+**Extraction metrics:** time to first asset and complete extraction; resource coverage and fidelity; effort and usability of an automated extractor; reuse across releases, projects and adapters; diversification effectiveness and developer cost. Also compare copies carrying different Distribution IDs and attempt marker removal/transplantation.
+
+**Operational metrics:** false positives/negatives, startup, memory, frame time, build time, patch bytes relative to the native baseline, staging, recovery, permitted-mod compatibility and offline availability. Set acceptable thresholds with target developers before testing rather than inventing them after seeing results.
+
+**Separate go/no-go decisions:** reduce or drop Protected if it fails to improve on the native baseline by the required amount or introduces unacceptable costs. Independently assess whether provenance and release management offer sufficient operational value: technical feasibility does not establish market demand. No protection percentage, crack time or superiority claim precedes measurement.
 
 ## 12. Questions for external reviewers
 
@@ -215,15 +246,15 @@ For media, standards such as **C2PA** already address provenance, distinguishing
 9. How can the Runtime Guard avoid breaking permitted mods, development tools, accessibility and software preservation?
 10. Do Distribution IDs provide enough forensic value to justify per-recipient packaging and attribution risks?
 11. Which experimental outcomes should cause us to **stop** working on the anti-tamper profile?
-12. If media-based techniques do not reliably influence AI models, could provenance and watermarking still form a useful separate product?
+12. Is the boundary with separate media research clear, and which provenance references alone merit interoperability?
 
-## 13. Agreed directions, open decisions and first deliverable
+## 13. Shared directions, open decisions and first deliverable
 
-**Design directions already discussed:** two distinct but potentially interoperable applications; BuildSeal integrated into the build/release lifecycle; hybrid architecture with a common Core and engine adapters; layered identities; fresh identities for every baseline and patch; integrity and provenance verification; selective functional dependency on protected resources; non-destructive failure; expert review before code.
+**Shared directions:** Core and adapters; layered identities; independently verifiable integrity and provenance; fresh identity for every sealed release; non-destructive failure; no covert telemetry; separate media research. Protected remains optional and experimental. The Release Manager is modular and must not replace adequate distribution services.
 
-**Open decisions after review:** target for the first PoC; manifest format; trust root; signing and timestamping model; key-management strategy; degree of online enforcement; concrete algorithms and container formats; adapter APIs; resource granularity; modding policy; store compatibility; project license and governance.
+**Open decisions:** PoC target; manifest format and canonicalization; trust root/bootstrap; key generation, delivery and rotation; algorithms and containers; patch granularity/cost; Connected model; adapter APIs; modding; platform compatibility and future component licensing. This revision does not change the existing LICENSE file.
 
-**Suggested first deliverable:** a reviewer-amended architecture, an agreed threat model and a minimal comparison experiment covering **(A)** signature and independent verifier, **(B)** A + Guard and selective offline encryption, and **(C)** B + optional remote authorization. Findings must report failures and side effects as carefully as successes.
+**First deliverable:** revised threat model, validated adoption matrix and preregistered protocol for the §11 A/B/C comparison, with a Connected variant if justified. Results must separate measured benefits, failures, side effects and untested hypotheses.
 
 ## 14. Technical references
 
@@ -237,6 +268,43 @@ The following are relevant standards or sources of engineering guidance. Their i
 - **NIST SP 800-38D:** [Galois/Counter Mode (GCM)](https://csrc.nist.gov/pubs/sp/800/38/d/final) — authenticated encryption.
 - **RFC 3161:** [Time-Stamp Protocol](https://www.rfc-editor.org/rfc/rfc3161) — trustworthy third-party timestamping.
 - **C2PA:** [official specifications](https://spec.c2pa.org/specifications/) — media provenance, content binding and watermarking.
+
+- **HKDF:** [RFC 5869](https://www.rfc-editor.org/rfc/rfc5869) — extract-and-expand key derivation; public context is not secret keying material.
+- **AEAD APIs:** [libsodium documentation](https://doc.libsodium.org/secret-key_cryptography/aead) — algorithms, nonce requirements and implementation constraints.
+- **AES-GCM-SIV:** [RFC 8452](https://www.rfc-editor.org/rfc/rfc8452) — nonce-misuse-resistant authenticated encryption; not a claim of implementation.
+
+## 15. Adoption, verifiers and distribution channels
+
+This matrix is an adoption hypothesis to validate with actual users and channel documentation, not a compatibility claim.
+
+| Scenario | Who verifies and where | Value to demonstrate / duplication to avoid |
+|---|---|---|
+| CI and internal promotion | Builder, release engineer and independent verifier | Consistent inventories, attestations, approvals and identity; compromised CI remains a threat |
+| Playtests and direct delivery | Studio, tester or external verifier with an authentic trust root | Package integrity and forensic correlation; updater only when needed |
+| PC stores, including Steam or itch.io | Store for services actually offered; studio/reviewer for its own attestations | Verify services/APIs per channel; do not assume stores are equivalent or automatically supply producer signing |
+| Consoles or managed platforms | Platform-authorized toolchain and mechanisms | Initial value in the internal pipeline; updater/Guard only where documentation and agreements allow |
+| HTML5 | Pipeline, external verifier and browser loader | Integrity and provenance within the stated model; used code and data remain inspectable |
+
+For each scenario document current cost, verifier users, authentic public-key acquisition, revocation behavior and benefit over existing services. TUF applies to a BuildSeal-managed update path when present; it is not mandated as a second updater over a store. No attestation automatically remedies builder or signing-key compromise.
+
+## 16. Related work and required comparisons
+
+| Family / primary source | Relationship to BuildSeal | Required comparison |
+|---|---|---|
+| [Godot PCK encryption](https://docs.godotengine.org/en/stable/engine_details/development/compiling/compiling_with_script_encryption_key.html) | Pack encryption with material available to the runtime | Native baseline for static extraction, dumping and integration cost |
+| [Steam DRM](https://partner.steamgames.com/doc/features/drm) | DRM wrapper; Valve states its limits against motivated attackers | Separate access control, code protection and provenance |
+| [SteamPipe](https://partner.steamgames.com/doc/sdk/uploading) | Packaging and updates; locality of changes matters | Encrypted/compressed patches, chunks and actual download bytes |
+| [Denuvo / Irdeto](https://irdeto.com/video-games) | Commercial game-protection family | Objectives, integration and requirements; no assumed equivalence or superiority |
+| [VMProtect](https://www.vmpsoft.com/vmprotect/overview) and [Themida / Oreans](https://www.oreans.com/products.php) | Code protection and resistance to analysis | Costs, compatibility and differences from inventory/attestation workflows |
+| TUF, in-toto, SLSA, Sigstore (§14) | Updates, attestations and provenance | Reuse standards; identify the incremental value of engine integration |
+
+Vendor sources describe features and goals, not independent benchmarks. Costs, false positives, overhead and bypasses of existing products require documented cases and comparable conditions; this revision assigns no unsupported values or incidents. It does not propose indiscriminate anti-VM or anti-debug controls contrary to §8.
+
+## 17. Current license and future component boundaries
+
+The repository contains a [GPL-3.0 LICENSE](LICENSE), which this revision **does not change**. The documentation describes future components, not a shipped SDK. Before accepting code or distributing a Guard, define licensing and boundaries for documentation, CLI/Core, adapters, runtime and dependencies.
+
+The GPL allows commercial activity; combination with proprietary software is the issue to assess. The [GNU FAQ](https://www.gnu.org/licenses/gpl-faq.html#LinkingWithGPL) distinguishes linking into a combined work from using separate programs. Running a Core in a pipeline does not automatically make game files GPL; incorporating or linking GPL code requires a different assessment. LGPL, MPL, Apache or an explicit exception are options with different obligations, not interchangeable substitutes. None is implicitly adopted here. The choice must fit technical integration, distribution and dependency licenses.
 
 ---
 
