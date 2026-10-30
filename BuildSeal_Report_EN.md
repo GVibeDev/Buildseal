@@ -1,6 +1,6 @@
 # BuildSeal — Abstract and Technical Feasibility Report
 
-**Version:** 0.3 — discussion document for peer review\
+**Version:** 0.3.1 — discussion document for peer review\
 **Date:** 30 October 2026  
 **Status:** pre-development proposal; no prototype or benchmarks completed  
 **Audience:** cybersecurity, reverse engineering, software supply-chain security, applied cryptography, game development and distribution professionals  
@@ -16,7 +16,7 @@ The primary problem is recognizing official artifacts, detecting changes and inc
 
 An optional, experimental **Protected** profile asks whether selective encryption and a Runtime Guard raise practical extraction costs beyond native engine protections. It does not guarantee permanent secrecy or enforcement on a fully attacker-controlled client. Connected changes the trust boundary only for secrets and operations actually retained server-side. Reconstruction from screenshots and videos is outside BuildSeal's protection promise; media provenance and watermarking belong to separate research.
 
-Revision 0.3 incorporates peer-review concerns: key origins, dynamic dumping, collusion between copies, reusable extractors, channel-specific adoption and update costs. **No prototype, benchmark or protection result exists yet.** The aim is to decide what merits an experiment and what should be dropped.
+Revision 0.3.1 incorporates peer-review concerns: key origins, dynamic dumping, collusion between copies, reusable extractors, channel-specific adoption and update costs. **No prototype, benchmark or protection result exists yet.** The aim is to decide what merits an experiment and what should be dropped.
 
 ## 1. Problem statement and objectives
 
@@ -35,15 +35,15 @@ The underlying tension is between an independent developer's need to display wor
 1. Make every official release **identifiable and independently verifiable**, provided that the verifier trusts the signer's key.
 2. Introduce an explicit **sealing and promotion** stage for baselines, patches and hotfixes.
 3. Preserve a verifiable **release lineage** and validate permitted state transitions during updates.
-4. Add **runtime verification** that conditions ordinary access to selected protected resources on package consistency.
+4. Evaluate **optional runtime verification** in Protected and Connected only, conditioning ordinary access to protected resources on package consistency. Standard does not require a Guard.
 5. Support forensic **project, release and distribution markers**, while separating technical indications from legal proof.
 6. Remain practical for independent teams: cost, overhead and maintenance must be proportionate to the benefit.
 
 **Non-goals:** claiming unbreakable DRM; protecting an abstract gameplay idea; punitive file deletion; undisclosed telemetry; automatically identifying the person responsible for a leak; indiscriminate blocking of VMs or debuggers; replacing platform security controls or copyright law.
 
-## 2. Design premise: an official release is a certified artifact
+## 2. Design premise: an official release is identified, signed and promoted
 
-Successful compilation is not the same as an official release. BuildSeal introduces a separate step: **a candidate build becomes distributable only after explicit verification, sealing and authorized registration**. Every subsequent change, however small, results in a new Release ID; a patch cannot impersonate an earlier version merely by renaming files or directories.
+Successful compilation is not the same as an official release. BuildSeal introduces a separate step: **a candidate build becomes distributable only after explicit verification, sealing and authorized registration**. Any change to common release content, however small, produces a new Release ID. Distribution variants under §4 may share that Release ID, but each is a distinct artifact with its own manifest, digest and signature. Verification must distinguish the logical release from the specific package; renaming files or directories does not change authenticated identity.
 
 The original concept of “identification files that do not implement gameplay themselves, yet are necessary for it to run” is refined into two separate functions:
 
@@ -61,9 +61,10 @@ flowchart TD
     C --> D[BuildSeal Core]
     D --> E[Digests, manifest, signatures, attestations]
     E --> F[Release Registry]
-    E --> G[Release Manager: publication and patches]
+    E --> G[Release Manager: publication and patches where needed]
     G --> H[Distribution]
-    H --> I[Runtime Guard integrated through adapter]
+    H --> S["Standard: independent verification without Guard"]
+    H -.-> I["Protected or Connected: optional Guard"]
     I --> J{Identity, signature, integrity and policy valid?}
     J -->|Yes| K[Load protected resources]
     J -->|No| L[Deny access with recoverable error]
@@ -72,7 +73,7 @@ flowchart TD
 
 **BuildSeal Core.** Engine-independent component, ideally exposing a CLI, responsible for inventories, hashing, manifest creation and verification, attestations, selected content packaging and signing. It does not need to understand game mechanics.
 
-**Engine Adapters.** Plugins or SDKs for engines such as Godot, Unity, Unreal, custom runtimes and HTML5. They connect pre-/post-build hooks, discover assets and loading points, declare target capabilities and integrate the Runtime Guard. Engine differences introduce different limits; compatibility must not be presumed.
+**Engine Adapters.** Plugins or SDKs for engines such as Godot, Unity, Unreal, custom runtimes and HTML5. They connect pre-/post-build hooks, discover assets and loading points and declare target capabilities. They integrate the Runtime Guard only in profiles that require it. Engine differences introduce different limits; compatibility must not be presumed.
 
 **Runtime Guard.** A library or runtime component that checks a trust root, validates manifests and resource-loading policy, reports errors and authorizes selected resource access. It can itself be modified and inspected on the attacker's device: **it is not an absolute root of trust**.
 
@@ -87,8 +88,10 @@ flowchart TD
 | Identifier | Lifetime | Meaning |
 |---|---|---|
 | **Project ID** | Stable throughout development | Logical identity of the product, associated with one or more authorized public keys |
-| **Release ID** | New for each sealed artifact | Identity of the specific build, manifest and associated attestations |
+| **Release ID** | New for each logical release | Identity of approved common content; declared variants have distinct digests and manifests |
 | **Distribution ID** | Optional, per batch/channel/tester | Forensic hint to differentiate distributed packages; does not automatically identify an individual |
+
+**Distributed-variant rule.** The Release ID identifies approved common content described by a signed release manifest. Each differentiated package has a signed distribution manifest binding the Release ID, release-manifest digest, Distribution ID and complete inventory of actual files. A release reference alone does not authenticate a variant. Only authorized marker fields and insertion points may differ; any other change requires a new release or invalidates the variant. The format and checks establishing correspondence with common content remain to be specified before the PoC.
 
 **Additional candidate fields:** source commit (where appropriate and non-sensitive), declared builder and environment, SHA-256 file digests, signing algorithm and key ID, asset inventory, authorized parent Release IDs, manifest schema version, policy, target platform and adapter capabilities, optional trusted timestamps.
 
@@ -110,11 +113,14 @@ Forensic references may be replicated across different package locations to impr
   "files": [
     {"path": "assets/core.pack", "sha256": "<hex-digest>", "protected": true}
   ],
-  "attestation_ref": "<attestation-reference>"
+  "attestation_ref": "<attestation-reference>",
+  "attestation_sha256": "<attestation-document-digest>"
 }
 ```
 
 Signatures must cover a **canonical and unambiguous representation** of the payload, without recursive references (the manifest must not include the hash of its own signature). Canonicalization, paths, symlinks, optional files, digest encodings, verification APIs and key rotation/revocation remain to be specified.
+
+**Attestation binding.** `attestation_ref` locates a document; it does not authenticate its contents. In this example, the signed `attestation_sha256` digest identifies the expected attestation bytes. The verifier must also validate its signature, authorized signer identity and subject digest against the attested artifacts. The attestation must not reference the digest of the manifest that contains its own digest: use non-circular subjects such as the build payload. The exact format, including attestation encoding, remains illustrative.
 
 ## 5. Key management, cryptographic guarantees and experimental runtime protection
 
@@ -147,7 +153,7 @@ An experimental variant may bind derivation to code and manifest hashes: modifyi
 
 ### 5.4 Nonces, algorithms and loading
 
-AES-GCM requires uniqueness of the key–nonce pair for distinct messages, including retries, parallel builds and resealing. Derivation must include a content version or change the key when a resource changes; a resource name alone does not manage re-encryption safely. Define verifiable nonce-allocation rules, usage limits and rebuild tests. Never obtain deduplication through unsafe key/nonce reuse.
+AES-GCM requires uniqueness of the key–nonce pair for distinct messages, including retries, parallel builds and resealing. A new encryption may retain the same key with a fresh unique nonce, within the algorithm's usage limits. If key or nonce allocation depends on resource identity, it must distinguish revisions, rebuilds and repeated attempts; the resource name alone does not guarantee uniqueness. Define verifiable nonce-allocation rules, usage limits and rebuild tests. Never obtain deduplication through unsafe key/nonce reuse.
 
 XChaCha20-Poly1305 has longer nonces useful for random allocation, but is not automatically nonce-misuse-resistant. AES-GCM-SIV is a separate candidate to assess for misuse resistance, with its own limits and library support to verify. The cited libsodium documentation is not assumed to establish AES-GCM-SIV support. No algorithm is finally selected.
 

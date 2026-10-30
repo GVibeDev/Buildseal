@@ -11,7 +11,7 @@
 | English | [Abstract and technical feasibility report](BuildSeal_Report_EN.md) |
 | Italiano | [Abstract e rapporto tecnico di fattibilità](BuildSeal_Report_IT.md) |
 
-**Status / Stato:** pre-development proposal, report version 0.3, 30 October 2026. No prototype or benchmarks yet. / Proposta pre-sviluppo, report versione 0.3, 30 ottobre 2026. Nessun prototipo o benchmark ancora disponibile.
+**Status / Stato:** pre-development proposal, report version 0.3.1, 30 October 2026. No prototype or benchmarks yet. / Proposta pre-sviluppo, report versione 0.3.1, 30 ottobre 2026. Nessun prototipo o benchmark ancora disponibile.
 
 ## English
 
@@ -54,3 +54,7 @@ See [LICENSE](LICENSE) for the GNU General Public License v3.0 included in this 
 This revision clarifies key management and trust boundaries, adds native-engine baselines, dynamic extraction and cross-copy attacks, and includes adoption, licensing and patch-size tradeoffs. Technical feasibility and user demand remain to be validated. See [CHANGELOG.md](CHANGELOG.md).
 
 La revisione chiarisce gestione delle chiavi e confini di fiducia, introduce confronti con i motori, estrazione dinamica e attacchi tra copie e aggiunge adozione, licenze e costi delle patch. Fattibilità tecnica e domanda restano da verificare. Vedi [CHANGELOG.md](CHANGELOG.md).
+
+### Corrections 0.3.1 / Correzioni 0.3.1
+
+Clarifies key–nonce uniqueness, optional runtime protection, logical releases versus distribution variants, and authenticated attestation references. / Chiarisce unicità chiave–nonce, protezione runtime opzionale, release logiche e varianti distribuite, e riferimenti autenticati alle attestazioni.

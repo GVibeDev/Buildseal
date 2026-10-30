@@ -1,6 +1,6 @@
 # BuildSeal — Abstract e rapporto tecnico di fattibilità
 
-**Versione:** 0.3 — documento di discussione per peer review\
+**Versione:** 0.3.1 — documento di discussione per peer review\
 **Data:** 30 ottobre 2026  
 **Stato:** proposta pre-sviluppo; nessun prototipo o benchmark ancora realizzato  
 **Destinatari:** professionisti di cybersecurity, reverse engineering, software supply-chain security, crittografia applicata, sviluppo e distribuzione di videogiochi  
@@ -16,7 +16,7 @@ Il problema di riferimento è riconoscere artefatti ufficiali, rilevare alterazi
 
 Un profilo **Protected**, facoltativo e sperimentale, studia se cifratura selettiva e Runtime Guard aumentino il costo pratico dell'estrazione rispetto alle protezioni native dei motori. Non garantisce segretezza permanente o enforcement su un client completamente controllato dall'attaccante. Una variante Connected cambia il modello di fiducia soltanto per segreti e operazioni effettivamente mantenuti sul server. La ricostruzione da screenshot e video è fuori dalla promessa di BuildSeal; provenienza dei media e watermark appartengono a una ricerca autonoma.
 
-Questa revisione 0.3 incorpora criticità emerse dalla peer review: origine delle chiavi, dump dinamico, collusione tra copie, riutilizzabilità degli estrattori, adozione per canale e costo degli aggiornamenti. **Non esistono ancora prototipi, benchmark o risultati di protezione.** Lo scopo è identificare ciò che vale la pena sperimentare e ciò che conviene abbandonare.
+Questa revisione 0.3.1 incorpora criticità emerse dalla peer review: origine delle chiavi, dump dinamico, collusione tra copie, riutilizzabilità degli estrattori, adozione per canale e costo degli aggiornamenti. **Non esistono ancora prototipi, benchmark o risultati di protezione.** Lo scopo è identificare ciò che vale la pena sperimentare e ciò che conviene abbandonare.
 
 ## 1. Origine del problema e obiettivi
 
@@ -35,15 +35,15 @@ Il problema nasce dalla tensione tra necessità di promuovere pubblicamente un v
 1. Rendere ogni release ufficiale **identificabile e verificabile da un soggetto indipendente**, subordinatamente alla fiducia nella chiave del firmatario.
 2. Imporre una fase esplicita di **sigillatura e promozione** attraverso la quale passano baseline, patch e hotfix.
 3. Documentare la **genealogia delle release** e verificare le transizioni consentite durante gli aggiornamenti.
-4. Integrare una **verifica runtime** che condizioni il normale accesso ad alcune risorse protette alla coerenza del pacchetto.
+4. Valutare, nei soli profili Protected e Connected, una **verifica runtime opzionale** che condizioni il normale accesso alle risorse protette alla coerenza del pacchetto. Il profilo Standard non richiede un Guard.
 5. Consentire **marcatori forensi** di progetto, release e distribuzione, distinguendo l'indizio tecnico dalla prova legale.
 6. Rimanere utilizzabile da studi indipendenti: costi, overhead e manutenzione devono essere proporzionati al beneficio.
 
 **Non-obiettivi:** DRM dichiarato inviolabile; protezione di un'idea astratta di gameplay; cancellazione punitiva di file; telemetria occulta; identificazione automatica dell'autore di un leak; blocco indiscriminato di VM/debugger; sostituzione dei controlli della piattaforma o della legislazione sul diritto d'autore.
 
-## 2. Principio progettuale: una release è un artefatto certificato
+## 2. Principio progettuale: una release è identificata, firmata e promossa
 
-La compilazione riuscita non equivale alla promozione ufficiale. BuildSeal introduce un passaggio indipendente: **una build candidata diventa distribuibile soltanto dopo verifiche, sigillatura e registrazione autorizzata**. Ogni modifica successiva, anche minima, produce una nuova identità di release; una patch non può essere scambiata per una versione precedente semplicemente rinominando file o cartelle.
+La compilazione riuscita non equivale alla promozione ufficiale. BuildSeal introduce un passaggio indipendente: **una build candidata diventa distribuibile soltanto dopo verifiche, sigillatura e registrazione autorizzata**. Una modifica al contenuto comune della release, anche minima, produce un nuovo Release ID. Le varianti di distribuzione previste dal §4 possono condividere il Release ID, ma ogni variante è un artefatto distinto con manifest, digest e firma propri. La verifica deve distinguere release logica e specifico pacchetto; rinominare file o cartelle non modifica l’identità autenticata.
 
 Il concetto originale di “file identificativi senza ruolo diretto nel gameplay, ma indispensabili al funzionamento” viene precisato in due funzioni diverse:
 
@@ -61,9 +61,10 @@ flowchart TD
     C --> D[BuildSeal Core]
     D --> E[Digest, manifest, firma, attestazioni]
     E --> F[Release Registry]
-    E --> G[Release Manager: pubblicazione e patch]
+    E --> G[Release Manager: pubblicazione e patch se necessarie]
     G --> H[Distribuzione]
-    H --> I[Runtime Guard integrato dall'adapter]
+    H --> S["Standard: verifica indipendente senza Guard"]
+    H -.-> I["Protected o Connected: Guard opzionale"]
     I --> J{Identità, firma, integrità e policy valide?}
     J -->|Sì| K[Caricamento risorse protette]
     J -->|No| L[Accesso negato, errore recuperabile]
@@ -72,7 +73,7 @@ flowchart TD
 
 **BuildSeal Core.** Componente universale, idealmente anche CLI, responsabile di inventario, hashing, generazione e verifica di manifest, attestazioni, packaging dei contenuti selezionati e firma. Non conosce le specifiche del gameplay.
 
-**Engine Adapters.** Plugin o SDK per motori come Godot, Unity, Unreal, motori custom e HTML5. Collegano gli step di pre/post-build, individuano asset e punti di caricamento, dichiarano le capacità effettive del target e integrano il Runtime Guard. Le differenze tra motori impongono limitazioni diverse: non si presume compatibilità automatica.
+**Engine Adapters.** Plugin o SDK per motori come Godot, Unity, Unreal, motori custom e HTML5. Collegano gli step di pre/post-build, individuano asset e punti di caricamento e dichiarano le capacità effettive del target. Integrano il Runtime Guard soltanto nei profili che lo richiedono. Le differenze tra motori impongono limitazioni diverse: non si presume compatibilità automatica.
 
 **Runtime Guard.** Libreria o componente integrato nell'esecuzione che controlla una radice di fiducia, verifica manifest e politica di caricamento, segnala errori e autorizza l'accesso alle risorse selezionate. È soggetto a modifica e analisi sul dispositivo dell'attaccante: **non costituisce una radice di fiducia assoluta**.
 
@@ -87,8 +88,10 @@ flowchart TD
 | Identificativo | Persistenza | Significato |
 |---|---|---|
 | **Project ID** | Stabile attraverso lo sviluppo | Identità logica dell'opera, associata a una o più chiavi pubbliche autorizzate |
-| **Release ID** | Nuovo a ogni artefatto sigillato | Identità specifica della build, del manifest e delle attestazioni |
+| **Release ID** | Nuovo a ogni release logica | Identità del contenuto comune approvato; varianti dichiarate hanno digest e manifest distinti |
 | **Distribution ID** | Facoltativo per lotto/canale/tester | Indizio forense per differenziare pacchetti distribuiti; non identifica automaticamente una persona |
+
+**Regola per le varianti distribuite.** Il Release ID identifica il contenuto comune approvato, descritto da un manifest di release firmato. Ogni pacchetto differenziato ha un manifest di distribuzione firmato che lega Release ID, digest del manifest di release, Distribution ID e inventario completo dei file effettivi. Il riferimento alla release da solo non autentica una variante. I soli campi e punti di inserimento dei marcatori autorizzati devono essere dichiarati; ogni altra modifica produce una nuova release o una variante non valida. Il formato e il controllo della corrispondenza con il contenuto comune restano da specificare prima del PoC.
 
 **Ulteriori dati possibili:** commit sorgente (quando appropriato e non sensibile), builder e ambiente dichiarati, hash SHA-256 dei componenti, algoritmo e key ID, asset inventory, Release ID dei predecessori autorizzati, versione del formato, policy, piattaforma e capacità dell'adapter, timestamp attendibile opzionale.
 
@@ -110,11 +113,14 @@ I riferimenti forensi possono essere duplicati in porzioni diverse del pacchetto
   "files": [
     {"path": "assets/core.pack", "sha256": "<hex-digest>", "protected": true}
   ],
-  "attestation_ref": "<attestation-reference>"
+  "attestation_ref": "<attestation-reference>",
+  "attestation_sha256": "<attestation-document-digest>"
 }
 ```
 
 La firma deve coprire una rappresentazione **canonica e non ambigua** del payload, evitando riferimenti ricorsivi (il manifest non include l'hash della propria firma). Sono da definire canonicalizzazione, gestione dei path, symlink, file opzionali, formati degli hash, API di verifica e rotazione/revoca delle chiavi.
+
+**Legame delle attestazioni.** `attestation_ref` localizza un documento; non ne autentica il contenuto. Nell’esempio, il digest firmato `attestation_sha256` identifica i byte dell’attestazione attesi. Il verificatore deve anche validarne firma, identità autorizzata del firmatario e subject digest rispetto agli artefatti attestati. L’attestazione non deve riferirsi al digest del manifest che contiene il proprio digest: usare subject non circolari, per esempio il payload della build. Il formato esatto, inclusa la codifica dell’attestazione, resta illustrativo.
 
 ## 5. Gestione delle chiavi, garanzie crittografiche e runtime sperimentale
 
@@ -147,7 +153,7 @@ Una variante sperimentale può legare la derivazione a hash di codice e manifest
 
 ### 5.4 Nonce, algoritmi e caricamento
 
-AES-GCM richiede unicità della coppia chiave–nonce per messaggi distinti, anche dopo retry, build parallele e nuova sigillatura. La derivazione deve includere una versione del contenuto o cambiare chiave quando una risorsa cambia; il solo nome della risorsa non basta a gestire le ricifrature. Servono regole verificabili di allocazione dei nonce, limiti d'uso e test di ricompilazione. Non si deve ottenere deduplicazione riutilizzando in modo improprio chiavi e nonce.
+AES-GCM richiede unicità della coppia chiave–nonce per messaggi distinti, anche dopo retry, build parallele e nuova sigillatura. Una nuova cifratura può mantenere la stessa chiave usando un nuovo nonce univoco, nel rispetto dei limiti d’uso dell’algoritmo. Se l’allocazione delle chiavi o dei nonce dipende dall’identità della risorsa, deve distinguere revisioni, ricompilazioni e tentativi ripetuti; il solo nome della risorsa non garantisce tale unicità. Servono regole verificabili di allocazione dei nonce, limiti d'uso e test di ricompilazione. Non si deve ottenere deduplicazione riutilizzando in modo improprio chiavi e nonce.
 
 XChaCha20-Poly1305 offre nonce più lunghi utili per allocazione casuale, ma non è automaticamente resistente al loro riuso. AES-GCM-SIV è una distinta alternativa da valutare per resistenza al misuse, con limiti propri e supporto della libreria da verificare. La documentazione libsodium citata non viene assunta come prova di supporto ad AES-GCM-SIV. Nessun algoritmo è selezionato definitivamente.
 
